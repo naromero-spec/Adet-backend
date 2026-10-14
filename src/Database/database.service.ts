@@ -13,7 +13,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       port: +(process.env.DB_PORT || 16031),
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
-       database: process.env.DB_NAME, //|| 'defaultdb',
+       database: process.env.DB_NAME || 'defaultdb',
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
