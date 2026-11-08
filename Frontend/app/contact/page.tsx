@@ -21,7 +21,7 @@ import {
 const contactInfo = [
   {
     title: "Email",
-    value: "your-email@example.com",
+    value: "naromero@gbox.ncf.edu.ph",
     icon: Mail,
     link: "mailto:naromero@gbox.ncf.edu.ph",
   },
