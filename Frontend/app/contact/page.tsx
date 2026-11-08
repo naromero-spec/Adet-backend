@@ -23,13 +23,13 @@ const contactInfo = [
     title: "Email",
     value: "your-email@example.com",
     icon: Mail,
-    link: "mailto:your-email@example.com",
+    link: "mailto:naromero@gbox.ncf.edu.ph",
   },
   {
     title: "Phone",
-    value: "Your contact number",
+    value: "+63 981 511 2991",
     icon: Phone,
-    link: "tel:+630000000000",
+    link: "tel:+639815112991",
   },
   {
     title: "Location",
