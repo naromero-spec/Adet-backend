@@ -1,7 +1,7 @@
-import { Injectable} from '@nestjs/common';
+
+import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../Database/database.service';
 import { RowDataPacket, OkPacket } from 'mysql2';
-// import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class AppointmentService {
@@ -9,67 +9,82 @@ export class AppointmentService {
 
   private pool = () => this.db.getPool();
 
+  // CREATE APPOINTMENT
   async create(name: string) {
     const [result] = await this.pool().execute<OkPacket>(
       'INSERT INTO appointments (name) VALUES (?)',
       [name],
     );
-    return { id: result.insertId, name };
+
+    return {
+      id: result.insertId,
+      name,
+    };
   }
 
-  async findByUsername(username: string) {
-    const [rows] = await this.pool().execute<RowDataPacket[]>(
-      'SELECT id, username, password, role, refresh_token FROM users WHERE username = ?',
-      [username],
-    );
-    return rows[0];
-  }
-
+  // GET APPOINTMENT BY ID
   async findById(id: number) {
-    const [rows] = await this.pool().execute<RowDataPacket[]>(
-      'SELECT id, username, role, created_at FROM users WHERE id = ?',
-      [id],
-    );
-    return rows[0];
-  }
+  const [rows] = await this.pool().execute<RowDataPacket[]>(
+    'SELECT * FROM appointments WHERE appointment_id = ?',
+    [id],
+  );
 
+  return rows[0];
+}
+  // GET ALL APPOINTMENTS
   async getAll() {
-    const [rows] = await this.pool().execute<RowDataPacket[]>(
-      'SELECT id, username, role, created_at FROM users',
-    );
-    return rows;
-  }
+  const [rows] = await this.pool().execute<RowDataPacket[]>(`
+    SELECT
+      a.appointment_id,
+      a.patient_id,
+      a.doctor_id,
+      a.appointment_date,
+      a.appointment_time,
+      a.reason,
+      a.status,
+      p.first_name AS patient_first_name,
+      p.last_name AS patient_last_name,
+      d.first_name AS doctor_first_name,
+      d.last_name AS doctor_last_name
+    FROM appointments a
+    JOIN patients p ON a.patient_id = p.patient_id
+    JOIN doctors d ON a.doctor_id = d.doctor_id
+    ORDER BY a.appointment_date ASC, a.appointment_time ASC
+  `);
 
+  return rows;
+}
+
+  // UPDATE APPOINTMENT
   async update(id: number, partial: { name?: string }) {
     const fields: string[] = [];
     const values: any[] = [];
-    if (partial.name) {
+
+    if (partial.name !== undefined) {
       fields.push('name = ?');
       values.push(partial.name);
     }
 
-    
-    if (fields.length === 0) return await this.findById(id);
+    if (fields.length === 0) {
+      return this.findById(id);
+    }
+
     values.push(id);
+
     const sql = `UPDATE appointments SET ${fields.join(', ')} WHERE id = ?`;
+
     await this.pool().execute(sql, values);
+
     return this.findById(id);
   }
 
+  // DELETE APPOINTMENT
   async delete(id: number) {
-    const [res] = await this.pool().execute<OkPacket>('DELETE FROM appointments WHERE id = ?', [id]);
-    return res.affectedRows > 0;
-  }
+    const [result] = await this.pool().execute<OkPacket>(
+      'DELETE FROM appointments WHERE id = ?',
+      [id],
+    );
 
-  async setRefreshToken(id: number, refreshToken: string | null) {
-    await this.pool().execute('UPDATE users SET refresh_token = ? WHERE id = ?', [refreshToken, id]);
-  }
-
-  async findByRefreshToken(refreshToken: string) {
-    const [rows] = await this.pool().execute<RowDataPacket[]>(
-      'SELECT id, username, role FROM users WHERE refresh_token = ?',
-      [refreshToken],
-    ); 
-    return rows[0];
+    return result.affectedRows > 0;
   }
 }

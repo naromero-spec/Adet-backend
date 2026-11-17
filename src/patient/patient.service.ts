@@ -13,42 +13,46 @@ export class PatientService {
   first_name: string,
   last_name: string,
   date_of_birth: string,
-  gender: 'Male' | 'Female' | 'Other',
+  gender: 'Male' | 'Female' | 'Other', 
   address?: string,
   phone?: string,
   email?: string,
   emergency_contact?: string,
   emergency_phone?: string,
 ) {
+
+  const clean = (value?: string) =>
+    value?.trim() || null;
+
   const [result] = await this.pool().execute<OkPacket>(
     `INSERT INTO patients
     (first_name, last_name, date_of_birth, gender, address, phone, email,
       emergency_contact, emergency_phone)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      first_name,
-      last_name,
+      first_name.trim(),
+      last_name.trim(),
       date_of_birth,
       gender,
-      address ?? null,
-      phone ?? null,
-      email ?? null,
-      emergency_contact ?? null,
-      emergency_phone ?? null,
+      clean(address),
+      clean(phone),
+      clean(email),
+      clean(emergency_contact),
+      clean(emergency_phone)
     ],
   );
 
   return {
     patient_id: result.insertId,
-    first_name,
-    last_name,
+    first_name: first_name.trim(),
+    last_name: last_name.trim(),
     date_of_birth,
     gender,
-    address: address ?? null,
-    phone: phone ?? null,
-    email: email ?? null,
-    emergency_contact: emergency_contact ?? null,
-    emergency_phone: emergency_phone ?? null,
+    address: clean(address),
+    phone: clean(phone),
+    email: clean(email),
+    emergency_contact: clean(emergency_contact),
+    emergency_phone: clean(emergency_phone),
   };
 }
 

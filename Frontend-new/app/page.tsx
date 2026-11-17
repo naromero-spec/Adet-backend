@@ -4,4 +4,3 @@ import { CONFIG } from '@/lib/config';
 export default function Home(){
   redirect(CONFIG.Routes.LOGIN);      
 }
-

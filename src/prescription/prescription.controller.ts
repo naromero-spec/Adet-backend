@@ -13,7 +13,7 @@ export class PrescriptionController {
   async getAll() {
     return this.PrescriptionService.getAll();
   }
-
+   
   // Get single prescription by id (protected)
   @UseGuards(JwtAuthGuard)
   @Get(':id')
