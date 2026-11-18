@@ -23,8 +23,15 @@ export class AppointmentController {
 
   // Create appointment (open - for demo)
   @Post()
-  async create(@Body() body: { name: string }) {
-    return this.appointmentService.create(body.name);
+  async create(@Body() body: {
+    patient_id: number;
+    doctor_id: number;
+    appointment_date: string;
+    appointment_time: string;
+    reason?: string;
+    status?: string;
+  }) {
+    return this.appointmentService.create(body);
   }
 
   // Update appointment (protected)

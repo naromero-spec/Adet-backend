@@ -10,16 +10,29 @@ export class AppointmentService {
   private pool = () => this.db.getPool();
 
   // CREATE APPOINTMENT
-  async create(name: string) {
+  async create(body: {
+    patient_id: number;
+    doctor_id: number;
+    appointment_date: string;
+    appointment_time: string;
+    reason?: string;
+    status?: string;
+  }) {
     const [result] = await this.pool().execute<OkPacket>(
-      'INSERT INTO appointments (name) VALUES (?)',
-      [name],
+      `INSERT INTO appointments
+      (patient_id, doctor_id, appointment_date, appointment_time, reason, status)
+      VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        body.patient_id,
+        body.doctor_id,
+        body.appointment_date,
+        body.appointment_time,
+        body.reason?.trim() || null,
+        body.status?.trim() || 'Scheduled',
+      ],
     );
 
-    return {
-      id: result.insertId,
-      name,
-    };
+    return this.findById(result.insertId);
   }
 
   // GET APPOINTMENT BY ID

@@ -11,10 +11,10 @@ export class RoomService {
 
   async create(name: string) {
     const [result] = await this.pool().execute<OkPacket>(
-      'INSERT INTO rooms (name) VALUES (?)',
-      [name],
+      'INSERT INTO rooms (room_number, room_type, status, daily_rate) VALUES (?, ?, ?, ?)',
+      [name, 'General', 'Available', 0],
     );
-    return { id: result.insertId, name };
+    return { room_id: result.insertId, room_number: name, room_type: 'General', status: 'Available', daily_rate: 0 };
   }
 
   async findByUsername(username: string) {
@@ -26,38 +26,40 @@ export class RoomService {
   }
 
   async findById(id: number) {
-    const [rows] = await this.pool().execute<RowDataPacket[]>(
-      'SELECT id, name FROM rooms WHERE id = ?',
-      [id],
-    );
-    return rows[0];
-  }
+  const [rows] = await this.pool().execute<RowDataPacket[]>(
+    'SELECT * FROM rooms WHERE room_id = ?',
+    [id],
+  );
+  return rows[0];
+}
 
   async getAll() {
-    const [rows] = await this.pool().execute<RowDataPacket[]>(
-      'SELECT id, name FROM rooms ORDER BY id DESC  ',
-    );
-    return rows;
-  }
+  const [rows] = await this.pool().execute<RowDataPacket[]>(
+    `SELECT room_id, room_number, room_type, status, daily_rate
+     FROM rooms
+     ORDER BY room_id DESC`,
+  );
+  return rows;
+}
 
   async update(id: number, partial: { name?: string }) {
     const fields: string[] = [];
     const values: any[] = [];
     if (partial.name) {
-      fields.push('name = ?');
+      fields.push('room_number = ?');
       values.push(partial.name);
     }
 
     
     if (fields.length === 0) return await this.findById(id);
     values.push(id);
-    const sql = `UPDATE rooms SET ${fields.join(', ')} WHERE id = ?`;
+    const sql = `UPDATE rooms SET ${fields.join(', ')} WHERE room_id = ?`;
     await this.pool().execute(sql, values);
     return this.findById(id);
   }
 
   async delete(id: number) {
-    const [res] = await this.pool().execute<OkPacket>('DELETE FROM rooms WHERE id = ?', [id]);
+    const [res] = await this.pool().execute<OkPacket>('DELETE FROM rooms WHERE room_id = ?', [id]);
     return res.affectedRows > 0;
   }
 

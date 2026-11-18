@@ -91,44 +91,43 @@ export class PatientService {
    })
    {
     const fields: string[] = [];
-    const values: any[] = [];
-    if (partial.first_name) {
+    const values: (string | number | null)[] = [];
+    if (partial.first_name !== undefined) {
       fields.push('first_name = ?');
-      values.push(partial.first_name);
+      values.push(partial.first_name.trim());
     }
-    if (partial.last_name) {
+    if (partial.last_name !== undefined) {
       fields.push('last_name = ?');
-      values.push(partial.last_name);
+      values.push(partial.last_name.trim());
     }
-    if (partial.date_of_birth) {
+    if (partial.date_of_birth !== undefined) {
       fields.push('date_of_birth = ?');
       values.push(partial.date_of_birth);
     }
-    if (partial.gender) {
+    if (partial.gender !== undefined) {
       fields.push('gender = ?');
       values.push(partial.gender);
     }
 
-    if (partial.address) {
+    if (partial.address !== undefined) {
       fields.push('address = ?');
-      values.push(partial.address);
+      values.push(partial.address.trim() || null);
     }
-    if (partial.phone) {
+    if (partial.phone !== undefined) {
       fields.push('phone = ?');
-      values.push(partial.phone);
+      values.push(partial.phone.trim() || null);
     }
-    if (partial.email) {
+    if (partial.email !== undefined) {
       fields.push('email = ?');
-      values.push(partial.email);
+      values.push(partial.email.trim() || null);
     }
-    if (partial.emergency_contact) {
+    if (partial.emergency_contact !== undefined) {
       fields.push('emergency_contact = ?');
-      values.push(partial.emergency_contact);
+      values.push(partial.emergency_contact.trim() || null);
     }
-    if (partial.emergency_phone) {
+    if (partial.emergency_phone !== undefined) {
       fields.push('emergency_phone = ?');
-
-      values.push(partial.emergency_phone);
+      values.push(partial.emergency_phone.trim() || null);
     }
     
 
