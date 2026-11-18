@@ -47,55 +47,43 @@ export default function DashboardPage() {
     const fetchDashboardStats = async () => {
       setLoadingStats(true);
 
-      const results = await Promise.allSettled([
-        apiClient<any[]>("/patient", {
-          requiresAuth: true,
-        }),
-        apiClient<any[]>("/doctor", {
-          requiresAuth: true,
-        }),
-        apiClient<any[]>("/appointment", {
-          requiresAuth: true,
-        }),
-        apiClient<Room[]>("/room", {
-          requiresAuth: true,
-        }),
+      const fetchCount = async (
+        endpoint: "/patient" | "/doctor" | "/appointment"
+      ) => {
+        try {
+          const records = await apiClient<unknown[]>(endpoint, {
+            requiresAuth: true,
+          });
+          return Array.isArray(records) ? records.length : 0;
+        } catch {
+          return 0;
+        }
+      };
+
+      const [patients, doctors, appointments] = await Promise.all([
+        fetchCount("/patient"),
+        fetchCount("/doctor"),
+        fetchCount("/appointment"),
       ]);
 
-      // PATIENTS
-      if (results[0].status === "fulfilled"){
-        setTotalPatients(results[0].value.length);
-      } else {
-        console.error("Failed to fetch patients:", results[0].reason);
-      }
+      setTotalPatients(patients);
+      setTotalDoctors(doctors);
+      setTotalAppointments(appointments);
 
-      // DOCTORS
-      if (results[1].status === "fulfilled"){
-        setTotalDoctors(results[1].value.length);
-      } else {
-        console.error("Failed to fetch doctors:", results[1].reason);
-      }
-
-      // APPOINTMENTS
-      if (results[2].status === "fulfilled"){
-        setTotalAppointments(results[2].value.length);
-      } else {
-        console.error("Failed to fetch appointments:", results[2].reason);
-      }
-
-      // AVAILABLE ROOMS
-      if (results[3].status === "fulfilled"){
-        const available = results[3].value.filter((room) => {
+      try {
+        const rooms = await apiClient<Room[]>("/room", {
+          requiresAuth: true,
+        });
+        const available = rooms.filter((room) => {
           const status = (
             room.status ?? room.room_status ?? ""
           ).toLowerCase();
 
           return status === "available";
         });
-
         setAvailableRooms(available.length);
-      } else {
-        console.error("Failed to fetch rooms:", results[3].reason);
+      } catch {
+        setAvailableRooms(0);
       }
 
       setLoadingStats(false);
@@ -343,6 +331,7 @@ export default function DashboardPage() {
             </p>
           </CardContent>
         </Card>
+        
       </div>
 
       {/* INFORMATION CARDS */}

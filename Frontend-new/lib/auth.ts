@@ -10,6 +10,16 @@ export const getAccessToken = (): string | null => {
     return token;
 };
 
+export const getRefreshToken = (): string | null => {
+    if(typeof window === 'undefined') return null;
+    const token = localStorage.getItem(CONFIG.STORAGE_KEYS.REFRESH_TOKEN);
+
+    if(!token || token === 'undefined' || token === 'null') {
+        return null;
+    }
+    return token;
+};
+
 export function setTokens(accessToken?: string, refreshToken?: string): void {
     if(typeof window === 'undefined') return;
 

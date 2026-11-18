@@ -1,8 +1,7 @@
 
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, type FormEvent } from "react";
 import {
   Users,
   Plus,
@@ -10,8 +9,11 @@ import {
   X,
   UserPlus,
   AlertCircle,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 
+import { useAuthGuard } from "../../hooks/useAuthGuard";
 import { apiClient } from "@/lib/api";
 
 import {
@@ -26,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 interface Patient {
+  patientId: number;
   firstName: string;
   lastName: string;
   dateOfBirth: string;
@@ -37,7 +40,21 @@ interface Patient {
   emergencyPhone: string;
 }
 
+interface PatientRecord {
+  patient_id: number;
+  first_name: string;
+  last_name: string;
+  date_of_birth: string;
+  gender: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  emergency_contact: string | null;
+  emergency_phone: string | null;
+}
+
 const initialForm: Patient = {
+  patientId: 0,
   firstName: "",
   lastName: "",
   dateOfBirth: "",
@@ -49,16 +66,68 @@ const initialForm: Patient = {
   emergencyPhone: "",
 };
 
+function toPatient(record: PatientRecord): Patient {
+  return {
+    patientId: record.patient_id,
+    firstName: record.first_name,
+    lastName: record.last_name,
+    dateOfBirth: record.date_of_birth.slice(0, 10),
+    gender: record.gender,
+    phone: record.phone ?? "",
+    email: record.email ?? "",
+    address: record.address ?? "",
+    emergencyContact: record.emergency_contact ?? "",
+    emergencyPhone: record.emergency_phone ?? "",
+  };
+}
+
 export default function PatientsPage() {
-  const router = useRouter();
+  const { isChecking } = useAuthGuard({ requireAuth: true });
 
   const [showForm, setShowForm] = useState(false);
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<Patient>(initialForm);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingPatients, setLoadingPatients] = useState(true);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [pageError, setPageError] = useState("");
   const [success, setSuccess] = useState("");
+
+  useEffect(() => {
+    if (isChecking) return;
+
+    let active = true;
+
+    const fetchPatients = async () => {
+      setLoadingPatients(true);
+      setPageError("");
+
+      try {
+        const records = await apiClient<PatientRecord[]>("/patient", {
+          requiresAuth: true,
+        });
+        if (active) setPatients(records.map(toPatient));
+      } catch (err: unknown) {
+        if (active) {
+          setPageError(
+            err instanceof Error
+              ? err.message
+              : "Failed to load patients. Please try again."
+          );
+        }
+      } finally {
+        if (active) setLoadingPatients(false);
+      }
+    };
+
+    fetchPatients();
+    return () => {
+      active = false;
+    };
+  }, [isChecking]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -69,7 +138,29 @@ export default function PatientsPage() {
     });
   };
 
-  const handleAddPatient = async (e: FormEvent<HTMLFormElement>) => {
+  const openAddForm = () => {
+    setEditingId(null);
+    setForm(initialForm);
+    setError("");
+    setSuccess("");
+    setShowForm(true);
+  };
+
+  const handleEdit = (patient: Patient) => {
+    setEditingId(patient.patientId);
+    setForm(patient);
+    setError("");
+    setSuccess("");
+    setShowForm(true);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(initialForm);
+  };
+
+  const handleSubmitPatient = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     setError("");
@@ -77,25 +168,77 @@ export default function PatientsPage() {
     setLoading(true);
 
     try {
-      await apiClient("/patient", {
-        method: "POST",
-        requiresAuth: true,
-        body: JSON.stringify(form),
-      });
+      const patientData = {
+        first_name: form.firstName,
+        last_name: form.lastName,
+        date_of_birth: form.dateOfBirth,
+        gender: form.gender,
+        phone: form.phone,
+        email: form.email,
+        address: form.address,
+        emergency_contact: form.emergencyContact,
+        emergency_phone: form.emergencyPhone,
+      };
+      const savedRecord = await apiClient<PatientRecord>(
+        editingId === null ? "/patient" : `/patient/${editingId}`,
+        {
+          method: editingId === null ? "POST" : "PUT",
+          requiresAuth: true,
+          body: JSON.stringify(patientData),
+        }
+      );
+      const savedPatient = toPatient(savedRecord);
 
-      setPatients((previous) => [form, ...previous]);
-      setForm(initialForm);
-      setShowForm(false);
-      setSuccess("Patient successfully added!");
+      if (editingId === null) {
+        setPatients((previous) => [savedPatient, ...previous]);
+        setSuccess("Patient successfully added!");
+      } else {
+        setPatients((previous) =>
+          previous.map((patient) =>
+            patient.patientId === editingId ? savedPatient : patient
+          )
+        );
+        setSuccess("Patient information successfully updated!");
+      }
 
+      closeForm();
     } catch (err: unknown) {
       setError(
         err instanceof Error
           ? err.message
-          : "Failed to add patient. Please try again."
+          : "Failed to save patient. Please try again."
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async (patientId: number) => {
+    if (!window.confirm("Are you sure you want to delete this patient?")) {
+      return;
+    }
+
+    setPageError("");
+    setSuccess("");
+    setDeletingId(patientId);
+
+    try {
+      await apiClient<boolean>(`/patient/${patientId}`, {
+        method: "DELETE",
+        requiresAuth: true,
+      });
+      setPatients((previous) =>
+        previous.filter((patient) => patient.patientId !== patientId)
+      );
+      setSuccess("Patient successfully deleted.");
+    } catch (err: unknown) {
+      setPageError(
+        err instanceof Error
+          ? err.message
+          : "Failed to delete patient. Please try again."
+      );
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -126,11 +269,7 @@ export default function PatientsPage() {
 
           <Button
             type="button"
-            onClick={() => {
-              setError("");
-              setSuccess("");
-              setShowForm(true);
-            }}
+            onClick={openAddForm}
             className=" gap-2 rounded-lg
           border border-teal-400/20
           bg-gradient-to-r from-[#0B1220] via-[#115E59] to-[#0D9488]
@@ -152,6 +291,13 @@ export default function PatientsPage() {
       {success && (
         <div className="mb-5 rounded-lg border border-teal-500/30 bg-teal-500/10 p-3 text-sm text-teal-400">
           {success}
+        </div>
+      )}
+
+      {pageError && (
+        <div className="mb-5 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
+          <AlertCircle size={18} className="shrink-0" />
+          {pageError}
         </div>
       )}
 
@@ -206,7 +352,7 @@ export default function PatientsPage() {
 
           <div className="overflow-x-auto">
 
-            <table className="w-full min-w-[650px] text-left text-sm">
+            <table className="w-full min-w-[850px] text-left text-sm">
 
               <thead>
                 <tr className="border-b border-slate-700 text-slate-400">
@@ -215,15 +361,22 @@ export default function PatientsPage() {
                   <th className="p-3">Gender</th>
                   <th className="p-3">Phone</th>
                   <th className="p-3">Email</th>
+                  <th className="p-3">Actions</th>
                 </tr>
               </thead>
 
               <tbody>
 
-                {filteredPatients.length > 0 ? (
-                  filteredPatients.map((patient, index) => (
+                {loadingPatients ? (
+                  <tr>
+                    <td colSpan={6} className="p-10 text-center text-slate-400">
+                      Loading patients...
+                    </td>
+                  </tr>
+                ) : filteredPatients.length > 0 ? (
+                  filteredPatients.map((patient) => (
                     <tr
-                      key={`${patient.email}-${index}`}
+                      key={patient.patientId}
                       className="border-b border-slate-700/60 hover:bg-slate-700/20"
                     >
                       <td className="p-3 font-medium text-slate-200">
@@ -245,17 +398,48 @@ export default function PatientsPage() {
                       <td className="p-3 text-slate-400">
                         {patient.email || "—"}
                       </td>
+
+                      <td className="p-3">
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEdit(patient)}
+                            className="border-teal-600/50 bg-transparent text-teal-400 hover:bg-teal-500/10 hover:text-teal-300"
+                          >
+                            <Pencil size={15} />
+                            Edit
+                          </Button>
+
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={deletingId === patient.patientId}
+                            onClick={() => handleDelete(patient.patientId)}
+                            className="border-red-600/50 bg-transparent text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                          >
+                            <Trash2 size={15} />
+                            {deletingId === patient.patientId
+                              ? "Deleting..."
+                              : "Delete"}
+                          </Button>
+                        </div>
+                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={6}
                       className="p-10 text-center text-slate-500"
                     >
                       <Users className="mx-auto mb-3 text-slate-600" size={30} />
                       {search
                         ? "No matching patients found."
+                        : pageError
+                        ? "Patient list could not be loaded."
                         : "No patients added yet."}
                     </td>
                   </tr>
@@ -284,11 +468,11 @@ export default function PatientsPage() {
 
                 <div>
                   <h2 className="text-lg font-bold text-white">
-                    Add New Patient
+                    {editingId === null ? "Add New Patient" : "Edit Patient"}
                   </h2>
 
                   <p className="text-xs text-slate-400">
-                    Enter the patient's information.
+                    Enter the patient&apos;s information.
                   </p>
                 </div>
 
@@ -296,7 +480,7 @@ export default function PatientsPage() {
 
               <button
                 type="button"
-                onClick={() => setShowForm(false)}
+                onClick={closeForm}
                 className="rounded-lg p-2 text-slate-400 hover:bg-slate-700 hover:text-white"
                 aria-label="Close form"
               >
@@ -305,7 +489,7 @@ export default function PatientsPage() {
 
             </div>
 
-            <form onSubmit={handleAddPatient}>
+            <form onSubmit={handleSubmitPatient}>
 
               <div className="grid gap-5 p-5 sm:grid-cols-2">
 
@@ -457,7 +641,7 @@ export default function PatientsPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setShowForm(false)}
+                  onClick={closeForm}
                   className="border-slate-600 bg-transparent text-slate-300 hover:bg-slate-700 hover:text-white"
                 >
                   Cancel
@@ -468,7 +652,11 @@ export default function PatientsPage() {
                   disabled={loading}
                   className="bg-gradient-to-r from-[#0B1220] via-[#115E59] to-[#0D9488] text-white hover:brightness-110"
                 >
-                  {loading ? "Saving..." : "Save Patient"}
+                  {loading
+                    ? "Saving..."
+                    : editingId === null
+                    ? "Save Patient"
+                    : "Save Changes"}
                 </Button>
 
               </div>
