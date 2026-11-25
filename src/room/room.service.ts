@@ -9,7 +9,8 @@ export class RoomService {
 
   private pool = () => this.db.getPool();
 
-  async create(
+ 
+async create(
   room_number: string,
   room_type = 'General',
   status = 'Available',
@@ -19,17 +20,23 @@ export class RoomService {
     `INSERT INTO rooms
     (room_number, room_type, status, daily_rate)
     VALUES (?, ?, ?, ?)`,
-    [room_number, room_type, status, daily_rate],
+    [
+      room_number,
+      room_type ?? 'General',
+      status ?? 'Available',
+      daily_rate ?? 0,
+    ],
   );
 
   return {
     room_id: result.insertId,
     room_number,
-    room_type,
-    status,
-    daily_rate,
+    room_type: room_type ?? 'General',
+    status: status ?? 'Available',
+    daily_rate: daily_rate ?? 0,
   };
 }
+
 
   async findById(id: number) {
   const [rows] = await this.pool().execute<RowDataPacket[]>(
