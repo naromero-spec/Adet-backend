@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
   CalendarDays,
   Plus,
@@ -16,82 +16,229 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuthGuard } from "../../hooks/useAuthGuard";
+import { apiClient } from "@/lib/api";
 
 interface Appointment {
-  id: number;
+  id: number | null;
+  patientId: number;
+  doctorId: number;
   patient: string;
   doctor: string;
   date: string;
   time: string;
   reason: string;
-  status: "Scheduled" | "Completed" | "Cancelled";
+  status: string;
+}
+
+interface AppointmentRecord {
+  appointment_id?: number | null;
+  id?: number | null;
+  patient_id: number;
+  doctor_id: number;
+  appointment_date?: string | null;
+  appointment_time?: string | null;
+  reason: string | null;
+  status: string;
+  patient_first_name: string;
+  patient_last_name: string;
+  doctor_first_name: string;
+  doctor_last_name: string;
+}
+
+interface PatientRecord {
+  patient_id: number;
+  first_name: string;
+  last_name: string;
+}
+
+interface DoctorRecord {
+  doctor_id: number;
+  first_name: string;
+  last_name: string;
+}
+
+interface PersonOption {
+  id: number;
+  name: string;
 }
 
 const initialForm = {
-  patient: "",
-  doctor: "",
+  patientId: "",
+  doctorId: "",
   date: "",
   time: "",
   reason: "",
 };
 
 export default function AppointmentsPage() {
+  const { isChecking } = useAuthGuard({ requireAuth: true });
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [patients, setPatients] = useState<PersonOption[]>([]);
+  const [doctors, setDoctors] = useState<PersonOption[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState("");
-
   const [form, setForm] = useState(initialForm);
-
   const [error, setError] = useState("");
+  const [pageError, setPageError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  // ADD APPOINTMENT
-  const handleAddAppointment = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setError("");
+  useEffect(() => {
+    if (isChecking) return;
 
-    const newAppointment: Appointment = {
-      id: Date.now(),
-      ...form,
-      status: "Scheduled",
+    let active = true;
+    const loadAppointments = async () => {
+      setPageError("");
+      try {
+        const [appointmentRecords, patientRecords, doctorRecords] =
+          await Promise.all([
+            apiClient<AppointmentRecord[]>("/appointment", {
+              requiresAuth: true,
+            }),
+            apiClient<PatientRecord[]>("/patient", { requiresAuth: true }),
+            apiClient<DoctorRecord[]>("/doctor", { requiresAuth: true }),
+          ]);
+        if (!active) return;
+
+        setAppointments(
+          appointmentRecords.map((record) => ({
+            id: record.appointment_id ?? record.id ?? null,
+            patientId: record.patient_id,
+            doctorId: record.doctor_id,
+            patient: `${record.patient_first_name} ${record.patient_last_name}`,
+            doctor: `${record.doctor_first_name} ${record.doctor_last_name}`,
+            date: record.appointment_date?.slice(0, 10) ?? "—",
+            time: record.appointment_time?.slice(0, 5) ?? "—",
+            reason: record.reason ?? "",
+            status: record.status,
+          }))
+        );
+        setPatients(
+          patientRecords.map((person) => ({
+            id: person.patient_id,
+            name: `${person.first_name} ${person.last_name}`,
+          }))
+        );
+        setDoctors(
+          doctorRecords.map((person) => ({
+            id: person.doctor_id,
+            name: `${person.first_name} ${person.last_name}`,
+          }))
+        );
+      } catch (err: unknown) {
+        if (active) {
+          setPageError(
+            err instanceof Error
+              ? err.message
+              : "Failed to load appointments."
+          );
+        }
+      }
     };
 
-    setAppointments((previous) => [
-      newAppointment,
-      ...previous,
-    ]);
+    loadAppointments();
+    return () => {
+      active = false;
+    };
+  }, [isChecking]);
 
-    setForm(initialForm);
-    setShowForm(false);
+  // ADD APPOINTMENT
+  const handleAddAppointment = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      const saved = await apiClient<AppointmentRecord>("/appointment", {
+        method: "POST",
+        requiresAuth: true,
+        body: JSON.stringify({
+          patient_id: Number(form.patientId),
+          doctor_id: Number(form.doctorId),
+          appointment_date: form.date,
+          appointment_time: form.time,
+          reason: form.reason,
+        }),
+      });
+      const patient = patients.find((item) => item.id === saved.patient_id);
+      const doctor = doctors.find((item) => item.id === saved.doctor_id);
+      if (!patient || !doctor) {
+        throw new Error("The saved appointment did not include valid patient and doctor details.");
+      }
+
+      setAppointments((previous) => [
+        {
+          id: saved.appointment_id ?? saved.id ?? null,
+          patientId: saved.patient_id,
+          doctorId: saved.doctor_id,
+          patient: patient.name,
+          doctor: doctor.name,
+          date: saved.appointment_date?.slice(0, 10) ?? form.date,
+          time: saved.appointment_time?.slice(0, 5) ?? form.time,
+          reason: saved.reason ?? form.reason,
+          status: "Scheduled",
+        },
+        ...previous,
+      ]);
+      setForm(initialForm);
+      setShowForm(false);
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to save appointment. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   // CANCEL APPOINTMENT
-  const handleCancel = (id: number) => {
+  const handleCancel = async (id: number) => {
     const confirmed = window.confirm(
       "Are you sure you want to cancel this appointment?"
     );
 
     if (!confirmed) return;
 
-    setAppointments((previous) =>
-      previous.map((appointment) =>
-        appointment.id === id
-          ? { ...appointment, status: "Cancelled" }
-          : appointment
-      )
-    );
+    setPageError("");
+    try {
+      await apiClient<AppointmentRecord>(`/appointment/${id}`, {
+        method: "PUT",
+        requiresAuth: true,
+        body: JSON.stringify({ status: "Cancelled" }),
+      });
+      setAppointments((previous) =>
+        previous.map((appointment) =>
+          appointment.id === id
+            ? { ...appointment, status: "Cancelled" }
+            : appointment
+        )
+      );
+    } catch (err: unknown) {
+      setPageError(err instanceof Error ? err.message : "Failed to cancel appointment.");
+    }
   };
 
   // DELETE APPOINTMENT
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     const confirmed = window.confirm(
       "Are you sure you want to delete this appointment?"
     );
 
     if (!confirmed) return;
 
-    setAppointments((previous) =>
-      previous.filter((appointment) => appointment.id !== id)
-    );
+    setPageError("");
+    try {
+      await apiClient<boolean>(`/appointment/${id}`, {
+        method: "DELETE",
+        requiresAuth: true,
+      });
+      setAppointments((previous) =>
+        previous.filter((appointment) => appointment.id !== id)
+      );
+    } catch (err: unknown) {
+      setPageError(err instanceof Error ? err.message : "Failed to delete appointment.");
+    }
   };
 
   // SEARCH
@@ -126,6 +273,12 @@ export default function AppointmentsPage() {
             Schedule and manage patient appointments.
           </p>
         </div>
+
+        {pageError && (
+          <p role="alert" className="text-sm text-red-400">
+            {pageError}
+          </p>
+        )}
 
         
 <Button
@@ -236,11 +389,17 @@ export default function AppointmentsPage() {
 
             <tbody>
               {filteredAppointments.length > 0 ? (
-                filteredAppointments.map((appointment) => (
-                  <tr
-                    key={appointment.id}
-                    className="border-b border-slate-700/60 hover:bg-slate-700/20"
-                  >
+                filteredAppointments.map((appointment, index) => {
+                  const appointmentId = appointment.id;
+                  const rowKey =
+                    appointmentId ??
+                    `${appointment.patient}-${appointment.doctor}-${appointment.date}-${appointment.time}-${index}`;
+
+                  return (
+                    <tr
+                      key={rowKey}
+                      className="border-b border-slate-700/60 hover:bg-slate-700/20"
+                    >
                     <td className="p-4 font-medium text-white">
                       {appointment.patient}
                     </td>
@@ -277,11 +436,11 @@ export default function AppointmentsPage() {
 
                     <td className="p-4">
                       <div className="flex items-center gap-2">
-                        {appointment.status === "Scheduled" && (
+                        {appointmentId !== null && appointment.status === "Scheduled" && (
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleCancel(appointment.id)}
+                            onClick={() => handleCancel(appointmentId)}
                             className="border-yellow-600/50 bg-transparent text-yellow-400 hover:bg-yellow-500/10 hover:text-yellow-300"
                           >
                             <Ban size={15} />
@@ -289,21 +448,24 @@ export default function AppointmentsPage() {
                           </Button>
                         )}
 
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDelete(appointment.id)}
-                          className="border-red-600/50 bg-transparent text-red-400 hover:bg-red-500/10 hover:text-red-300"
-                        >
-                          <Trash2 size={15} />
-                          Delete
-                        </Button>
+                        {appointmentId !== null && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDelete(appointmentId)}
+                            className="border-red-600/50 bg-transparent text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                          >
+                            <Trash2 size={15} />
+                            Delete
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               ) : (
-                <tr>
+                <tr key="empty-appointments">
                   <td
                     colSpan={7}
                     className="p-12 text-center text-slate-500"
@@ -352,33 +514,43 @@ export default function AppointmentsPage() {
               <div className="grid gap-5 p-5 sm:grid-cols-2">
 
                 <div className="space-y-2 sm:col-span-2">
-                  <Label className="text-slate-300">
-                    Patient Name *
+                  <Label htmlFor="appointment-patient" className="text-slate-300">
+                    Patient *
                   </Label>
-                  <Input
+                  <select
+                    id="appointment-patient"
                     required
-                    value={form.patient}
-                    onChange={(e) =>
-                      setForm({ ...form, patient: e.target.value })
-                    }
-                    placeholder="Enter patient name"
-                    className="border-slate-600 bg-[#0B1220] text-white"
-                  />
+                    value={form.patientId}
+                    onChange={(e) => setForm({ ...form, patientId: e.target.value })}
+                    className="h-10 w-full rounded-md border border-slate-600 bg-[#0B1220] px-3 text-sm text-white"
+                  >
+                    <option value="">Select a patient</option>
+                    {patients.map((patient) => (
+                      <option key={patient.id} value={patient.id}>
+                        {patient.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="space-y-2 sm:col-span-2">
-                  <Label className="text-slate-300">
-                    Doctor Name *
+                  <Label htmlFor="appointment-doctor" className="text-slate-300">
+                    Doctor *
                   </Label>
-                  <Input
+                  <select
+                    id="appointment-doctor"
                     required
-                    value={form.doctor}
-                    onChange={(e) =>
-                      setForm({ ...form, doctor: e.target.value })
-                    }
-                    placeholder="Enter doctor name"
-                    className="border-slate-600 bg-[#0B1220] text-white"
-                  />
+                    value={form.doctorId}
+                    onChange={(e) => setForm({ ...form, doctorId: e.target.value })}
+                    className="h-10 w-full rounded-md border border-slate-600 bg-[#0B1220] px-3 text-sm text-white"
+                  >
+                    <option value="">Select a doctor</option>
+                    {doctors.map((doctor) => (
+                      <option key={doctor.id} value={doctor.id}>
+                        {doctor.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="space-y-2">
@@ -427,7 +599,7 @@ export default function AppointmentsPage() {
                 </div>
 
                 {error && (
-                  <p className="text-sm text-red-400 sm:col-span-2">
+                  <p role="alert" className="text-sm text-red-400 sm:col-span-2">
                     {error}
                   </p>
                 )}
@@ -445,10 +617,11 @@ export default function AppointmentsPage() {
 
                 <Button
                   type="submit"
+                  disabled={loading}
                   className="bg-gradient-to-r from-[#0B1220] via-[#115E59] to-[#0D9488] text-white hover:brightness-110"
                 >
                   <Plus size={17} />
-                  Save Appointment
+                  {loading ? "Saving..." : "Save Appointment"}
                 </Button>
               </div>
             </form>

@@ -28,6 +28,17 @@ interface Room {
   room_status?: string;
 }
 
+interface AppointmentRecord {
+  appointment_id?: number | null;
+  appointment_date: string;
+  appointment_time?: string | null;
+  status?: string | null;
+  patient_first_name: string;
+  patient_last_name: string;
+  doctor_first_name: string;
+  doctor_last_name: string;
+}
+
 export default function DashboardPage() {
   const { isChecking } = useAuthGuard({ requireAuth: true });
   const { username } = useDashboardShell();
@@ -37,6 +48,8 @@ export default function DashboardPage() {
   const [totalDoctors, setTotalDoctors] = useState(0);
   const [totalAppointments, setTotalAppointments] = useState(0);
   const [availableRooms, setAvailableRooms] = useState(0);
+  const [appointments, setAppointments] = useState<AppointmentRecord[]>([]);
+  const [appointmentsError, setAppointmentsError] = useState("");
 
   const [loadingStats, setLoadingStats] = useState(true);
 
@@ -63,12 +76,22 @@ export default function DashboardPage() {
       const [patients, doctors, appointments] = await Promise.all([
         fetchCount("/patient"),
         fetchCount("/doctor"),
-        fetchCount("/appointment"),
+        apiClient<AppointmentRecord[]>("/appointment", {
+          requiresAuth: true,
+        }).catch((error: unknown) => {
+          setAppointmentsError(
+            error instanceof Error
+              ? error.message
+              : "Failed to load appointments."
+          );
+          return [];
+        }),
       ]);
 
       setTotalPatients(patients);
       setTotalDoctors(doctors);
-      setTotalAppointments(appointments);
+      setAppointments(appointments);
+      setTotalAppointments(appointments.length);
 
       try {
         const rooms = await apiClient<Room[]>("/room", {
@@ -120,39 +143,8 @@ export default function DashboardPage() {
     },
   ];
 
-  const appointments = [
-    {
-      patient: "",
-      doctor: "",
-      date: "Nov 12, 2026",
-      time: "9:00 AM",
-      status: "Scheduled",
-    },
-    {
-      patient: "Maria Santos",
-      doctor: "Dr. Reyes",
-      date: "Nov 12, 2026",
-      time: "10:30 AM",
-      status: "Scheduled",
-    },
-    {
-      patient: "Pedro Reyes",
-      doctor: "Dr. Cruz",
-      date: "Nov 12, 2026",
-      time: "1:00 PM",
-      status: "Completed",
-    },
-    {
-      patient: "Ana Garcia",
-      doctor: "Dr. Lopez",
-      date: "Nov 12, 2026",
-      time: "2:30 PM",
-      status: "Cancelled",
-    },
-  ];
-
   const patientOverview = [
-    { month: "Aug", value: 78 },
+    { month: "Aug", value: 78 }, 
     { month: "Sep", value: 95 },
     { month: "Oct", value: 110 },
     { month: "Nov", value: 135 },
@@ -250,41 +242,53 @@ export default function DashboardPage() {
               </thead>
 
               <tbody>
-                {appointments.map((appointment, index) => (
+                {appointments.slice(0, 5).map((appointment, index) => (
                   <tr
-                    key={index}
+                    key={
+                      appointment.appointment_id ??
+                      `${appointment.appointment_date}-${appointment.appointment_time ?? ""}-${index}`
+                    }
                     className="border-b border-slate-100 last:border-0"
                   >
                     <td className="whitespace-nowrap py-4 font-medium text-slate-700">
-                      {appointment.patient}
+                      {appointment.patient_first_name} {appointment.patient_last_name}
                     </td>
 
                     <td className="whitespace-nowrap py-4 text-slate-500">
-                      {appointment.doctor}
+                      {appointment.doctor_first_name} {appointment.doctor_last_name}
                     </td>
 
                     <td className="whitespace-nowrap py-4 text-slate-500">
-                      <div>{appointment.date}</div>
+                      <div>
+                        {new Date(`${appointment.appointment_date}T00:00:00`).toLocaleDateString()}
+                      </div>
                       <div className="text-xs text-slate-400">
-                        {appointment.time}
+                        {appointment.appointment_time?.slice(0, 5) || "—"}
                       </div>
                     </td>
 
                     <td className="py-4">
                       <span
                         className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium ${
-                          appointment.status === "Completed"
+                          appointment.status?.toLowerCase() === "completed"
                             ? "bg-green-100 text-green-700"
-                            : appointment.status === "Cancelled"
+                            : appointment.status?.toLowerCase() === "cancelled"
                             ? "bg-red-100 text-red-700"
                             : "bg-teal-50 text-teal-700"
                         }`}
                       >
-                        {appointment.status}
+                        {appointment.status || "Scheduled"}
                       </span>
                     </td>
                   </tr>
                 ))}
+                {appointments.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-sm text-slate-500">
+                      {appointmentsError || "No appointments available yet."}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </CardContent>
