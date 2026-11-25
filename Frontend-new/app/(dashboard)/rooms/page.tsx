@@ -65,40 +65,44 @@ export default function RoomsPage() {
   }, []);
 
   // ADD ROOM
-  const handleAddRoom = async (e: React.FormEvent) => {
-    e.preventDefault();
+ 
+const handleAddRoom = async (e: React.FormEvent) => {
+  e.preventDefault();
 
-    if (!roomNumber.trim()) {
-      setError("Please enter a room number.");
-      return;
-    }
+  if (!roomNumber.trim()) {
+    setError("Please enter a room number.");
+    return;
+  }
 
-    try {
-      setError("");
-      setSuccess("");
+  try {
+    setError("");
+    setSuccess("");
 
-      const newRoom = await apiClient<room>("/room", {
-        method: "POST",
-        requiresAuth: false,
-        body: JSON.stringify({
-          name: roomNumber.trim(),
-        }),
-      });
+    const newRoom = await apiClient<room>("/room", {
+      method: "POST",
+      requiresAuth: false,
+      body: JSON.stringify({
+        room_number: roomNumber.trim(),
+        room_type: "General",
+        status: "Available",
+        daily_rate: 0,
+      }),
+    });
 
-      setRooms((previous) => [newRoom, ...previous]);
+    setRooms((previous) => [newRoom, ...previous]);
 
-      setRoomNumber("");
-      setShowForm(false);
-      setSuccess("Room added successfully!");
+    setRoomNumber("");
+    setShowForm(false);
+    setSuccess("Room added successfully!");
 
-    } catch (err: unknown) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Failed to add room. Please try again."
-      );
-    }
-  };
+  } catch (err: unknown) {
+    setError(
+      err instanceof Error
+        ? err.message
+        : "Failed to add room. Please try again."
+    );
+  }
+};
 
   // DELETE ROOM
   const handleDeleteRoom = async (id: number) => {
