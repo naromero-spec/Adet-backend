@@ -23,9 +23,22 @@ export class RoomController {
 
   // Create room (open - for demo)
   @Post()
-  async create(@Body() body: { name: string }) {
-    return this.RoomService.create(body.name);
-  }
+async create(
+  @Body()
+  body: {
+    room_number: string;
+    room_type?: string;
+    status?: string;
+    daily_rate?: number;
+  },
+) {
+  return this.RoomService.create(
+    body.room_number,
+    body.room_type,
+    body.status,
+    body.daily_rate,
+  );
+}
 
   // Update room (protected)
   @UseGuards(JwtAuthGuard)
