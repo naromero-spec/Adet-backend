@@ -34,15 +34,17 @@ export class RoomService {
 }
 
   
+
 async getAll() {
   const [rows] = await this.pool().execute<RowDataPacket[]>(
     `SELECT room_id, room_number, room_type, status, daily_rate
-     FROM rooms
+      FROM rooms
      ORDER BY room_id DESC`,
   );
 
   return rows;
 }
+
 
 
   async update(id: number, partial: { name?: string }) {
