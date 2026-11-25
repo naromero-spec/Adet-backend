@@ -37,7 +37,7 @@ export class AppointmentController {
   // Update appointment (protected)
   @UseGuards(JwtAuthGuard)
   @Put(':id')
-  async update(@Param('id') id: string, @Body() body: any) {
+  async update(@Param('id') id: string, @Body() body: { status?: string }) {
     return this.appointmentService.update(+id, body);
   }
 

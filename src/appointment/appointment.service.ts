@@ -69,13 +69,12 @@ export class AppointmentService {
 }
 
   // UPDATE APPOINTMENT
-  async update(id: number, partial: { name?: string }) {
+  async update(id: number, partial: { status?: string }) {
     const fields: string[] = [];
-    const values: any[] = [];
-
-    if (partial.name !== undefined) {
-      fields.push('name = ?');
-      values.push(partial.name);
+    const values: (string | number)[] = [];
+    if (partial.status !== undefined) {
+      fields.push('status = ?');
+      values.push(partial.status);
     }
 
     if (fields.length === 0) {
@@ -84,7 +83,7 @@ export class AppointmentService {
 
     values.push(id);
 
-    const sql = `UPDATE appointments SET ${fields.join(', ')} WHERE id = ?`;
+    const sql = `UPDATE appointments SET ${fields.join(', ')} WHERE appointment_id = ?`;
 
     await this.pool().execute(sql, values);
 
@@ -94,7 +93,7 @@ export class AppointmentService {
   // DELETE APPOINTMENT
   async delete(id: number) {
     const [result] = await this.pool().execute<OkPacket>(
-      'DELETE FROM appointments WHERE id = ?',
+      'DELETE FROM appointments WHERE appointment_id = ?',
       [id],
     );
 
